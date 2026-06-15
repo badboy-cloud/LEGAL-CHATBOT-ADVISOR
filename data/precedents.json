@@ -1,0 +1,174 @@
+{
+  "defamation": [
+    {
+      "case_id": "D001",
+      "case_name": "Rajesh Kumar v. Sharma Publications",
+      "year": 2018,
+      "court": "Delhi High Court",
+      "topic": "defamation",
+      "relevant_sections": ["IPC 499", "IPC 500"],
+      "facts": "Newspaper published false allegations about business practices causing reputation damage",
+      "holding": "False statements published with negligence constitute defamation. Damages awarded.",
+      "applicable_law": "IPC Sections 499-500",
+      "judgment": "The publication of defamatory material in newspaper with proof of actual malice entitles plaintiff to damages. Court awarded Rs. 5,00,000 as compensation.",
+      "principle": "Truth, public interest, and fair comment are defenses to defamation"
+    },
+    {
+      "case_id": "D002",
+      "case_name": "Meera Kapoor v. Social Media Platform",
+      "year": 2020,
+      "court": "Mumbai High Court",
+      "topic": "defamation",
+      "relevant_sections": ["IPC 499", "IPC 500"],
+      "facts": "False allegations posted on social media platform damaging reputation",
+      "holding": "Social media platforms can be held liable for defamatory content if they do not remove after notice",
+      "applicable_law": "IPC Sections 499-500 with IT Act provisions",
+      "judgment": "Platform directed to remove defamatory posts within 24 hours of notice. Damages awarded.",
+      "principle": "Internet service providers have responsibility to monitor defamatory content"
+    }
+  ],
+  "labour_employment": [
+    {
+      "case_id": "L001",
+      "case_name": "Workers Union v. Industrial Corporation",
+      "year": 2019,
+      "court": "National Labor Relations Board",
+      "topic": "labour_employment",
+      "relevant_sections": ["Code of Wages 2019", "Industrial Disputes Act 1947"],
+      "facts": "Workers terminated without notice or compensation after 15 years of service",
+      "holding": "Unjustified termination without following proper procedure violates labor laws",
+      "applicable_law": "Industrial Disputes Act 1947, Code of Wages 2019",
+      "judgment": "Workers entitled to reinstatement with back wages and compensation. Rs. 50 lakhs awarded.",
+      "principle": "Employers must follow due process for termination and provide notice period"
+    },
+    {
+      "case_id": "L002",
+      "case_name": "Arvind Singh v. Factory Management",
+      "year": 2017,
+      "court": "State Labor Court",
+      "topic": "labour_employment",
+      "relevant_sections": ["Code of Wages 2019"],
+      "facts": "Employee worked 60 hours per week without overtime compensation for 2 years",
+      "holding": "Overtime compensation is mandatory for hours beyond standard working hours",
+      "applicable_law": "Code of Wages 2019, Section 13",
+      "judgment": "Employer ordered to pay overtime compensation at 1.5x rate for all additional hours. Rs. 8 lakhs awarded.",
+      "principle": "Overtime compensation is a statutory right not subject to waiver"
+    }
+  ],
+  "property_law": [
+    {
+      "case_id": "P001",
+      "case_name": "Sharma Estate v. Malik Family",
+      "year": 2021,
+      "court": "Delhi High Court",
+      "topic": "property_law",
+      "relevant_sections": ["Transfer of Property Act 1882"],
+      "facts": "Property transfer disputed due to incomplete documentation and lack of consideration",
+      "holding": "Valid transfer requires proper documentation and sufficient consideration",
+      "applicable_law": "Transfer of Property Act 1882, Indian Succession Act 1925",
+      "judgment": "Transfer declared void due to lack of consideration. Property reverted to original owner.",
+      "principle": "Every property transfer must comply with statutory formalities"
+    },
+    {
+      "case_id": "P002",
+      "case_name": "Tenant Association v. Landlord Singh",
+      "year": 2020,
+      "court": "State Property Tribunal",
+      "topic": "property_law",
+      "relevant_sections": ["Transfer of Property Act 1882"],
+      "facts": "Landlord unlawfully increased rent by 200% and threatened eviction",
+      "holding": "Rent increase must follow statutory procedure with notice and justification",
+      "applicable_law": "Property laws with rent control provisions",
+      "judgment": "Rent increase limited to 10% annually. Landlord directed to provide 3 months notice.",
+      "principle": "Tenant rights are protected against arbitrary eviction and excessive rent hikes"
+    }
+  ],
+  "cyber_law": [
+    {
+      "case_id": "C001",
+      "case_name": "State v. Hacker Network",
+      "year": 2022,
+      "court": "Cyber Crime Court",
+      "topic": "cyber_law",
+      "relevant_sections": ["Information Technology Act 2000 Section 66"],
+      "facts": "Unauthorized access to bank servers resulted in data breach affecting 50,000 customers",
+      "holding": "Hacking with intent to cause damage is a serious cybercrime with significant penalties",
+      "applicable_law": "IT Act 2000, Section 66",
+      "judgment": "Convicted hackers sentenced to 3 years imprisonment and Rs. 5 lakh fine each.",
+      "principle": "Cybersecurity is critical infrastructure; unauthorized access is severely punished"
+    }
+  ],
+  "family_law": [
+    {
+      "case_id": "F001",
+      "case_name": "Priya Sharma v. Rajesh Sharma",
+      "year": 2019,
+      "court": "Family Court",
+      "topic": "family_law",
+      "relevant_sections": ["Hindu Marriage Act 1955", "IPC 498A"],
+      "facts": "Wife filed for divorce citing cruelty and dowry demands",
+      "holding": "Excessive dowry demands and mental cruelty are valid grounds for divorce",
+      "applicable_law": "Hindu Marriage Act 1955, Section 13, IPC 498A",
+      "judgment": "Divorce granted. Husband ordered to pay maintenance Rs. 25,000 monthly. Dowry amount refunded.",
+      "principle": "Dowry is illegal; its demand constitutes cruelty under family law"
+    },
+    {
+      "case_id": "F002",
+      "case_name": "State v. Dowry Taker",
+      "year": 2018,
+      "court": "Criminal Court",
+      "topic": "family_law",
+      "relevant_sections": ["Dowry Prohibition Act 1961"],
+      "facts": "Groom and family demanded dowry of Rs. 10 lakhs and jewelry",
+      "holding": "Dowry demand is criminal offense under Dowry Prohibition Act",
+      "applicable_law": "Dowry Prohibition Act 1961, Section 3",
+      "judgment": "All defendants sentenced to 2 years imprisonment and fine of Rs. 1 lakh each.",
+      "principle": "Dowry is illegal; both demanding and giving dowry are criminal acts"
+    }
+  ],
+  "criminal_law": [
+    {
+      "case_id": "CR001",
+      "case_name": "State v. Accused Person",
+      "year": 2020,
+      "court": "District Court",
+      "topic": "criminal_law",
+      "relevant_sections": ["IPC 304"],
+      "facts": "Death occurred due to rash and negligent driving resulting in vehicle collision",
+      "holding": "Rash and negligent driving causing death is culpable homicide not amounting to murder",
+      "applicable_law": "IPC Section 304",
+      "judgment": "Convicted. Sentenced to 5 years imprisonment and disqualified from driving for life.",
+      "principle": "Negligent acts causing death are seriously punished under criminal law"
+    }
+  ],
+  "contract_law": [
+    {
+      "case_id": "CT001",
+      "case_name": "ABC Corporation v. XYZ Services",
+      "year": 2021,
+      "court": "Commercial Court",
+      "topic": "contract_law",
+      "relevant_sections": ["Indian Contract Act 1872"],
+      "facts": "Service provider failed to deliver contracted services within agreed timeline",
+      "holding": "Breach of contract entitles non-breaching party to compensation",
+      "applicable_law": "Indian Contract Act 1872, Section 73",
+      "judgment": "Damages awarded at Rs. 20 lakhs for lost profits and business disruption.",
+      "principle": "Contracts are enforceable; breach results in damage compensation"
+    }
+  ],
+  "consumer_law": [
+    {
+      "case_id": "CON001",
+      "case_name": "Consumer v. Mobile Manufacturer",
+      "year": 2022,
+      "court": "Consumer Disputes Redressal Commission",
+      "topic": "consumer_law",
+      "relevant_sections": ["Consumer Protection Act 2019"],
+      "facts": "Mobile phone battery exploded within warranty period causing injury",
+      "holding": "Manufacturers are liable for defective products causing injury",
+      "applicable_law": "Consumer Protection Act 2019, Section 53",
+      "judgment": "Manufacturer ordered to pay Rs. 2 lakhs compensation for injury and loss.",
+      "principle": "Consumer safety is paramount; manufacturers have strict liability"
+    }
+  ]
+}
