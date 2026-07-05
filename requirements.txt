@@ -41,6 +41,7 @@ requests
 scikit-learn
 python-dotenv
 pandas
-
-
 ollama
+cryptography>=42.0.0
+bcrypt>=4.1.0
+pyjwt>=2.8.0

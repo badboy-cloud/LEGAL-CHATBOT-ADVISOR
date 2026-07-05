@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indian Legal Advisor - Legal Query</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Stylesheets -->
+    <link href="css/style.css" rel="stylesheet">
+    <link href="css/responsive.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar glass-panel" id="app-sidebar">
+            <div class="sidebar-logo">
+                <span class="fs-4">⚖️</span>
+                <span class="fw-bold gradient-text">Advisor AI</span>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="menu-item"><a href="dashboard.html"><i class="fa-solid fa-chart-line"></i> Dashboard</a></li>
+                <li class="menu-item active"><a href="query.html"><i class="fa-solid fa-lightbulb"></i> Legal Query</a></li>
+                <li class="menu-item"><a href="fir.html"><i class="fa-solid fa-file-invoice"></i> FIR Analysis</a></li>
+                <li class="menu-item"><a href="notice.html"><i class="fa-solid fa-magnifying-glass-chart"></i> Notice Analysis</a></li>
+                <li class="menu-item"><a href="chat.html"><i class="fa-solid fa-comments"></i> Case Chat</a></li>
+                <li class="menu-item" id="admin-dashboard-link" style="display:none;"><a href="history.html"><i class="fa-solid fa-table-list"></i> History & Logs</a></li>
+                <li class="menu-item"><a href="profile.html"><i class="fa-solid fa-circle-user"></i> Profile</a></li>
+                <li class="menu-item"><a href="settings.html"><i class="fa-solid fa-gears"></i> Settings</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="fw-semibold text-light small" id="user-profile-name">Username</div>
+                        <div class="text-muted" style="font-size: 11px;" id="user-profile-role">User</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="logout()"><i class="fa-solid fa-power-off"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="main-content">
+            <!-- Topbar Header -->
+            <div class="top-bar glass-panel">
+                <div class="d-flex align-items-center">
+                    <button class="top-bar-toggle me-3" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+                    <h4 class="mb-0 fw-bold">💡 Legal Query Advisory</h4>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="badge bg-success border border-success-subtle">🟢 System Online</span>
+                </div>
+            </div>
+
+            <!-- Page Body Content -->
+            <div class="page-body container-fluid fade-in">
+                <div class="row g-4">
+                    <!-- Input Section -->
+                    <div class="col-lg-5">
+                        <div class="glass-panel p-4 h-100">
+                            <h4 class="fw-bold mb-3 text-warning"><i class="fa-solid fa-pen-nib me-2"></i> Describe Case Facts</h4>
+                            <p class="text-muted small">Input details of your legal problem to classify the domain, retrieve matching Supreme Court precedents, and compile a Qwen-reasoned brief.</p>
+                            
+                            <form id="query-form">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted">Legal Query Details</label>
+                                    <textarea class="form-control" id="query-input" rows="8" required placeholder="E.g., My neighbor built a fence that encroaches onto my registered property plot. When I objected, they threatened me. What are my legal remedies?"></textarea>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label text-muted small d-block">Suggested Templates:</label>
+                                    <div class="suggested-questions">
+                                        <span class="question-chip">"My neighbor built a fence that encroaches onto my registered property plot."</span>
+                                        <span class="question-chip">"Someone hacked my email account, changed passwords, and demands money to restore it."</span>
+                                        <span class="question-chip">"A retail supplier sent defective goods but refuses replacement or refund."</span>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn gradient-btn w-100 py-2"><i class="fa-solid fa-magnifying-glass me-2"></i> Run AI Legal Analysis</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Output Section -->
+                    <div class="col-lg-7">
+                        <div class="glass-panel p-4 h-100">
+                            <h4 class="fw-bold mb-3 text-warning"><i class="fa-solid fa-paste me-2"></i> AI Legal Advisory Report</h4>
+                            
+                            <div id="query-alert-container"></div>
+                            
+                            <!-- Loading Spinner -->
+                            <div id="query-spinner" class="d-none text-center py-5">
+                                <div class="spinner-border text-warning mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                                <h5 class="text-warning">Running Legal Pipeline...</h5>
+                                <p class="text-muted small">Performing InLegalBERT Classification & FAISS Retrieval...</p>
+                            </div>
+
+                            <!-- Results display panel -->
+                            <div id="query-results-panel" class="d-none">
+                                <!-- Meta Rows -->
+                                <div class="mb-3 d-flex flex-wrap gap-2">
+                                    <span class="metric-badge" id="meta-topic-badge">Topic: N/A</span>
+                                    <span class="metric-badge" id="meta-time-badge">Time: N/A</span>
+                                    <span class="metric-badge" id="meta-precedents-badge">Cases: N/A</span>
+                                </div>
+
+                                <!-- Bootstrap Tabs -->
+                                <ul class="nav nav-tabs border-secondary mb-3" id="queryTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active bg-transparent text-light border-0 border-bottom border-warning" id="tab-advice" data-bs-toggle="tab" data-bs-target="#advice-pane" type="button" role="tab">💡 Advice</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link bg-transparent text-light border-0" id="tab-statutes" data-bs-toggle="tab" data-bs-target="#statutes-pane" type="button" role="tab">⚖️ Statutes</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link bg-transparent text-light border-0" id="tab-precedents" data-bs-toggle="tab" data-bs-target="#precedents-pane" type="button" role="tab">📚 Precedents</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link bg-transparent text-light border-0" id="tab-raw" data-bs-toggle="tab" data-bs-target="#raw-pane" type="button" role="tab">📊 Raw Response</button>
+                                    </li>
+                                </ul>
+
+                                <div class="tab-content" id="queryTabsContent">
+                                    <!-- Legal Advice Pane -->
+                                    <div class="tab-pane fade show active text-light" id="advice-pane" role="tabpanel">
+                                        <div class="p-2 overflow-auto" id="advice-content" style="max-height: 480px;"></div>
+                                    </div>
+                                    
+                                    <!-- Statutes Accordions Pane -->
+                                    <div class="tab-pane fade" id="statutes-pane" role="tabpanel">
+                                        <div class="accordion" id="statutes-content" style="max-height: 480px; overflow-y: auto;"></div>
+                                    </div>
+
+                                    <!-- Precedents Accordions Pane -->
+                                    <div class="tab-pane fade" id="precedents-pane" role="tabpanel">
+                                        <div class="accordion" id="precedents-content" style="max-height: 480px; overflow-y: auto;"></div>
+                                    </div>
+
+                                    <!-- JSON Response Pane -->
+                                    <div class="tab-pane fade" id="raw-pane" role="tabpanel">
+                                        <pre class="bg-dark text-success p-3 rounded overflow-auto" id="raw-response-json" style="max-height: 480px; font-size: 13px;"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/query.js"></script>
+    <!-- Bootstrap JS Bundle (requires popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleSidebar() {
+            document.getElementById('app-sidebar').classList.toggle('active');
+        }
+    </script>
+</body>
+</html>

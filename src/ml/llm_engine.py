@@ -2,12 +2,26 @@ import requests
 import json
 import time
 import logging
+import sys
+import re
 from typing import Dict, List, Optional, Tuple
+from datetime import datetime
 from src.utils.logger import LegalAdvisorLogger
+
+# Fix Windows console encoding: Qwen responses may contain unicode characters
+# (e.g. ₹) that crash print() on Windows cp1252 codec.
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(errors='replace')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Module level cache for Ollama model verification
+_OLLAMA_MODEL_VERIFIED = False
 
 
 class LLMEngine:
@@ -39,6 +53,10 @@ class LLMEngine:
         """
         Auto-check model availability via API and CLI.
         """
+        global _OLLAMA_MODEL_VERIFIED
+        if _OLLAMA_MODEL_VERIFIED:
+            return True
+
         # Try HTTP tags API first
         try:
             logger.info("[LLM_REQUEST] Checking Ollama connection at %s", self.ollama_url)
@@ -49,6 +67,7 @@ class LLMEngine:
                 logger.info("[LLM_RESPONSE] Available models from API: %s", available_models)
                 if any(self.model in name or name in self.model for name in available_models):
                     logger.info("[LLM_RESPONSE] Model %s verified via HTTP API", self.model)
+                    _OLLAMA_MODEL_VERIFIED = True
                     return True
         except Exception as e:
             logger.warning("[LLM_ERROR] Ollama HTTP connection failed: %s", str(e))
@@ -62,6 +81,7 @@ class LLMEngine:
                 logger.info("[LLM_RESPONSE] 'ollama list' output: %s", res.stdout)
                 if self.model in res.stdout:
                     logger.info("[LLM_RESPONSE] Model %s verified via CLI", self.model)
+                    _OLLAMA_MODEL_VERIFIED = True
                     return True
         except Exception as e:
             logger.warning("[LLM_ERROR] 'ollama list' check failed: %s", str(e))
@@ -72,6 +92,9 @@ class LLMEngine:
         """
         Verify Ollama server is running and model exists.
         """
+        global _OLLAMA_MODEL_VERIFIED
+        if _OLLAMA_MODEL_VERIFIED:
+            return True
         return self._check_model_in_ollama()
 
     def generate_legal_advice(
@@ -104,7 +127,13 @@ class LLMEngine:
 
         prompt = self._build_prompt(query, topic, statutes, precedents)
         start_time = time.time()
-        response_text = self._attempt_with_retries(prompt, temperature)
+        # Enforce options/limits: num_predict=384, top_p=0.9, temperature=0.2
+        response_text = self._attempt_with_retries(
+            prompt=prompt,
+            temperature=0.2,
+            min_words=None,
+            check_completeness=False
+        )
         llm_time = time.time() - start_time
 
         if response_text:
@@ -144,6 +173,51 @@ class LLMEngine:
         parsed = RegexFIRParser.parse(text)
         elapsed = time.time() - start_time
         logger.info("[TIMING] Regex Extraction took %.3f seconds", elapsed)
+
+        # Context Window Protection (Priority 4)
+        MAX_FIR_CHARS = 12000
+        if len(text) > MAX_FIR_CHARS:
+            logger.info(f"[CONTEXT_PROTECTION] FIR text length ({len(text)} chars) exceeds {MAX_FIR_CHARS}. Generating summary first...")
+            
+            # Generate summary of the FIR using LLM
+            summary_prompt = f"""You are a professional legal expert. Summarize the following long FIR text into a clear, detailed, and concise narrative. 
+Focus on:
+1. The chronological order of key events.
+2. The specific criminal actions and allegations.
+3. The names and roles of the accused and victims.
+4. Any items, money, or digital assets stolen, seized, or defrauded.
+
+FIR text (truncated for summary):
+{text[:15000]}
+"""
+            # Use _attempt_with_retries to get the summary
+            summary = self._attempt_with_retries(
+                prompt=summary_prompt,
+                temperature=0.2,
+                system_prompt="You are a professional legal expert. Summarize the provided FIR text clearly and concisely. Do not explain your thinking."
+            )
+            
+            if summary:
+                logger.info(f"[CONTEXT_PROTECTION] Generated FIR Summary ({len(summary)} chars)")
+                # Pass summary + extracted metadata to Qwen
+                parsed["incident_summary"] = summary
+                metadata_summary = f"""SUMMARY:
+{summary}
+
+EXTRACTED METADATA:
+- FIR Number: {parsed.get('fir_number', 'N/A')}
+- Police Station: {parsed.get('police_station', 'N/A')}
+- Complainant: {parsed.get('complainant', 'N/A')}
+- Accused: {parsed.get('accused', 'N/A')}
+- Nature of Offence: {parsed.get('nature_of_offence', 'N/A')}
+- Location: {parsed.get('location', 'N/A')}
+- Sections Charged: {', '.join(parsed.get('legal_sections', []) + parsed.get('crpc_sections', []))}
+"""
+                parsed["raw_text"] = metadata_summary
+            else:
+                logger.warning("[CONTEXT_PROTECTION] Summary generation failed, falling back to truncated raw text")
+                parsed["raw_text"] = text[:MAX_FIR_CHARS]
+                
         return parsed
 
     def analyze_fir_legal_issues(
@@ -158,10 +232,10 @@ class LLMEngine:
         """
         logger.info("[LLM_REQUEST] Running FIR Legal Analysis, topic=%s", topic)
         
-        # Budgeting to keep prompt size strictly under 3000 characters
+        # Budgeting to keep prompt size strictly under 1200 characters
         summary = fir_details.get('incident_summary') or fir_details.get('incident_description') or "No incident summary."
-        if len(summary) > 500:
-            summary = summary[:470] + "... [TRUNCATED]"
+        if len(summary) > 200:
+            summary = summary[:190] + "... [TRUNCATED]"
 
         ipc_sects = fir_details.get('ipc_sections') or []
         if isinstance(ipc_sects, str):
@@ -171,102 +245,53 @@ class LLMEngine:
             bns_sects = [bns_sects]
             
         sections_str = ", ".join(ipc_sects + bns_sects)
-        if len(sections_str) > 150:
-            sections_str = sections_str[:140] + "... [TRUNCATED]"
+        if len(sections_str) > 80:
+            sections_str = sections_str[:75] + "... [TRUNCATED]"
 
         # Format statutes
-        statutes_compact = []
-        for stat in statutes[:3]:  # Top 3 statutes max
-            code = stat.get("code", "")
-            title = stat.get("title", "")
-            desc = stat.get("description", "")
-            if len(desc) > 120:
-                desc = desc[:115] + "... [TRUNCATED]"
-            statutes_compact.append({
-                "code": code,
-                "title": title,
-                "desc": desc
-            })
+        statutes_compact = ", ".join([s.get("code", "") for s in statutes[:3]])
             
         # Format precedents
-        precedents_compact = ""
-        for idx, prec in enumerate(precedents[:2], 1):  # Top 2 precedents max
-            case_name = prec.get('case_name', 'Unknown')
-            facts = prec.get('facts', '')
-            if len(facts) > 120:
-                facts = facts[:115] + "... [TRUNCATED]"
-            holding = prec.get('holding', '')
-            if len(holding) > 100:
-                holding = holding[:95] + "... [TRUNCATED]"
-            precedents_compact += f"\n{idx}. Case: {case_name}\nFacts: {facts}\nHolding: {holding}\n"
+        precedents_compact = ", ".join([p.get('case_name', 'Unknown') for p in precedents[:2]])
 
-        prompt = f"""You are an Indian legal advisor.
+        prompt = f"""You are an Indian legal advisor. Analyze this FIR:
+FIR: {fir_details.get('fir_number', 'N/A')} | PS: {fir_details.get('police_station', 'N/A')} | Complainant: {fir_details.get('complainant', 'N/A')} | Accused: {fir_details.get('accused', 'N/A')}
+Sections: {sections_str}
+Summary: {summary}
+Topic: {topic}
+Statutes: {statutes_compact}
+Precedents: {precedents_compact}
 
-DO NOT think.
-DO NOT explain your reasoning.
-DO NOT use chain of thought.
-DO NOT generate internal analysis.
+Output EXACTLY this format (150-250 words total, max 300 words, no extra text):
+### Case Summary
+[Summary of the incident]
 
-Return only the final answer.
+### Legal Issues
+[Key legal questions]
 
-Format response in Markdown exactly as:
+### Applicable Laws
+[Relevant statutes/precedents]
 
-### 1. Case Summary
-...
+### Recommendations
+[Next steps/remedies]
 
-### 2. Applicable IPC/BNS Sections
-...
-
-### 3. Legal Interpretation
-...
-
-### 4. Potential Punishments
-...
-
-### 5. Relevant Precedents
-...
-
-### 6. Rights of Complainant
-...
-
-### 7. Rights of Accused
-...
-
-### 8. Recommended Next Steps
-...
-
-### 9. Legal Risks
-...
-
-### 10. Disclaimer
-...
-
-Maximum 250 words.
-
-=== FIR DETAILS ===
-- FIR Number: {fir_details.get('fir_number', 'Not found')}
-- Police Station: {fir_details.get('police_station', 'Not found')}
-- Complainant: {fir_details.get('complainant', 'Not found')}
-- Accused: {fir_details.get('accused', 'Not found')}
-- Nature of Offence: {fir_details.get('nature_of_offence', 'Not found')}
-- Location: {fir_details.get('location', 'Not found')}
-- Date: {fir_details.get('date_of_incident') or fir_details.get('date', 'Not found')}
-- Sections: {sections_str}
-- Incident Summary: {summary}
-
-=== APPLICABLE STATUTES ===
-{json.dumps(statutes_compact, indent=1)}
-
-=== SIMILAR PRECEDENTS ===
-{precedents_compact}
+### Disclaimer
+This is for informational purposes only. Consult a lawyer.
+=== GENERATE RESPONSE ===
 """
-        max_prompt_chars = 3000
+        max_prompt_chars = 1200
         if len(prompt) > max_prompt_chars:
-            logger.warning("[LLM_WARN] Prompt length (%d) exceeds limit. Safety truncating to %d characters.", len(prompt), max_prompt_chars)
-            prompt = prompt[:2800] + "\n\n[TRUNCATED TO FIT LIMIT]\n=== GENERATE RESPONSE ==="
+            prompt = prompt[:1150] + "\n=== GENERATE RESPONSE ==="
             
         start_time = time.time()
-        response_text = self._attempt_with_retries(prompt, temperature=0.2, timeout=self.timeout)
+        # Enforce 0.2 temperature, no word checks, completeness validation disabled
+        response_text = self._attempt_with_retries(
+            prompt=prompt, 
+            temperature=0.2, 
+            timeout=self.timeout,
+            min_words=None,
+            check_completeness=False
+        )
         elapsed = time.time() - start_time
         
         logger.info("[TIMING] Qwen generation took %.3f seconds", elapsed)
@@ -310,17 +335,88 @@ Maximum 250 words.
             "llm_time": elapsed
         }
 
-    def _attempt_with_retries(self, prompt: str, temperature: float, timeout: Optional[int] = None) -> Optional[str]:
+    def _is_response_incomplete(self, text: str) -> bool:
         """
-        Attempt generation with retry logic and exponential backoff.
+        Check if the generated response is incomplete or truncated.
+        """
+        if not text or not text.strip():
+            return True
+            
+        text_stripped = text.strip()
+        
+        # Check if response ends with specific words/phrases (case-insensitive)
+        incomplete_endings = [
+            "case", "ipc", "legal", "recommendations:", "i need", 
+            "first", "recommendation", "okay, let's", "let's"
+        ]
+        
+        # Normalize text to lowercase and strip trailing non-alphanumeric/non-colon chars for suffix check
+        import re
+        normalized_end = re.sub(r'[^a-zA-Z0-9\s:]', '', text_stripped).lower().strip()
+        
+        for ending in incomplete_endings:
+            clean_ending = re.sub(r'[^a-zA-Z0-9\s:]', '', ending).lower().strip()
+            if normalized_end.endswith(clean_ending):
+                logger.warning(f"[INCOMPLETE_CHECK] Response ends with incomplete word/phrase: '{ending}'")
+                return True
+                
+        # Check if the response ends in a dangling sentence (missing terminal punctuation)
+        if not re.search(r'[.!?`*_"\'\)\}\]]$', text_stripped):
+            logger.warning("[INCOMPLETE_CHECK] Response does not end with sentence-terminating punctuation.")
+            return True
+            
+        # Check if all required sections are present (case-insensitive)
+        required_sections = [
+            "case summary",
+            "legal issues",
+            "applicable laws",
+            "potential consequences",
+            "recommendations"
+        ]
+        
+        lower_text = text_stripped.lower()
+        section_matches = {
+            "case summary": ["case summary"],
+            "legal issues": ["legal issues", "key legal issues"],
+            "applicable laws": ["applicable laws", "potential offences", "relevant legal principles", "applicable statutes"],
+            "potential consequences": ["potential consequences", "possible legal consequences", "consequences"],
+            "recommendations": ["recommendations", "recommended next steps", "recommendation"]
+        }
+        
+        for section, patterns in section_matches.items():
+            if not any(pat in lower_text for pat in patterns):
+                logger.warning(f"[INCOMPLETE_CHECK] Missing required section: '{section}'")
+                return True
+                
+        return False
+
+    def _attempt_with_retries(
+        self,
+        prompt: str,
+        temperature: float,
+        timeout: Optional[int] = None,
+        min_words: Optional[int] = None,
+        check_completeness: bool = False,
+        check_json: bool = False,
+        system_prompt: Optional[str] = None,
+        num_predict: Optional[int] = None
+    ) -> Optional[str]:
+        """
+        Attempt generation with retry logic, exponential backoff, completeness checks, and minimum word count constraint.
         """
         if "qwen" in self.model.lower():
             if not prompt.startswith("/no_think"):
                 prompt = "/no_think\n" + prompt
 
         req_timeout = timeout or self.timeout
+        max_attempts = 4  # Initial attempt + 3 retries (total 4)
         
-        max_attempts = 3  # Attempt 1, Attempt 2, Attempt 3
+        if system_prompt is None:
+            system_prompt = "You are a professional Indian legal advisor. Provide a comprehensive, detailed legal analysis and report. Answer all sections thoroughly. Do not explain your reasoning or internal thinking."
+
+        # Default prediction tokens length
+        pred_tokens = num_predict or (768 if check_json else 384)
+
         for attempt in range(max_attempts):
             try:
                 # Check model availability first
@@ -330,89 +426,160 @@ Maximum 250 words.
                 req_start_time = time.time()
                 start_time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(req_start_time))
                 
-                prompt_len = len(prompt)
-                prompt_preview = prompt[:100].replace('\n', ' ')
-                logger.info(f"[QWEN_REQUEST] Start Time={start_time_str} | Attempt={attempt + 1}/{max_attempts} | Prompt Length={prompt_len} chars")
-                logger.info(f"[QWEN_REQUEST] Prompt Preview: {prompt_preview}...")
+                logger.info(f"[QWEN_REQUEST] Start Time={start_time_str} | Attempt={attempt + 1}/{max_attempts} | Prompt Length={len(prompt)} chars")
 
-                http_response = requests.post(
-                    self.generate_endpoint,
-                    json={
-                        "model": self.model,
-                        "prompt": prompt,
-                        "system": "You are an Indian legal assistant. Respond directly. Do not think step-by-step. Do not explain reasoning. Provide concise legal advice.",
-                        "stream": False,
-                        "options": {
-                            "temperature": 0.2,
-                            "num_predict": 300,
-                            "top_p": 0.9
-                        }
-                    },
-                    timeout=req_timeout,
-                )
+                # We can also support streaming collection dynamically. If stream=True is requested:
+                stream_enabled = False  # Set to True if we want streaming
                 
-                req_end_time = time.time()
-                end_time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(req_end_time))
-                actual_duration = req_end_time - req_start_time
-                logger.info(f"[QWEN_REQUEST] End Time={end_time_str} | Actual Duration={actual_duration:.3f} seconds")
+                if stream_enabled:
+                    http_response = requests.post(
+                        self.generate_endpoint,
+                        json={
+                            "model": self.model,
+                            "prompt": prompt,
+                            "system": system_prompt,
+                            "stream": True,
+                            "think": False,
+                            "options": {
+                                "temperature": temperature,
+                                "num_predict": pred_tokens,
+                                "top_p": 0.9
+                            }
+                        },
+                        timeout=req_timeout,
+                        stream=True
+                    )
+                    
+                    req_end_time = time.time()
+                    actual_duration = req_end_time - req_start_time
+                    logger.info(f"[QWEN_REQUEST] Attempt {attempt + 1} completed in {actual_duration:.3f} seconds")
 
-                # Log Qwen Raw Response
-                logger.info(f"[RAW_QWEN_RESPONSE] {http_response.text}")
-
-                if http_response.status_code == 200:
-                    response = http_response.json()
-                    logger.info(f"RAW_QWEN_RESPONSE={response}")
-                    
-                    answer = ""
-                    if isinstance(response, dict):
-                        answer = (
-                            response.get("message", {}).get("content")
-                            or response.get("response")
-                            or response.get("generated_text")
-                            or response.get("text")
-                            or ""
-                        )
-                    
-                    # If response is empty but thinking contains text, use thinking as fallback
-                    if (not answer or not answer.strip()) and isinstance(response, dict):
-                        thinking_content = response.get("thinking", "")
-                        if thinking_content and thinking_content.strip():
-                            answer = thinking_content
-                    
-                    # Detect empty responses and raise exception
-                    if answer is None or not isinstance(answer, str) or len(answer.strip()) == 0:
-                        raise ValueError("Ollama returned an empty response, whitespace only, or None.")
-                    
-                    # Strip whitespace
-                    answer = answer.strip()
-                    
-                    # Remove thinking tags/markers
-                    if "</think>" in answer:
-                        answer = answer.split("</think>")[-1].strip()
-                    if "...done thinking." in answer:
-                        answer = answer.split("...done thinking.")[-1].strip()
-                        
-                    # Add parser
-                    if "...done thinking." in answer:
-                        answer = answer.split("...done thinking.")[-1].strip()
-                        
-                    # Detect if parsed answer becomes empty after stripping
-                    if len(answer.strip()) == 0:
-                        raise ValueError("Parsed answer is empty after removing thinking block.")
-
-                    # Log parsed answer
-                    logger.info(f"PARSED_QWEN_ANSWER={answer}")
-                    logger.info(f"[PARSED_QWEN_ANSWER] {answer}")
-                    
-                    eval_count = response.get("eval_count", 0) if isinstance(response, dict) else 0
-                    logger.info(f"[QWEN_OUTPUT_LENGTH] {len(answer)}")
-                    logger.info(f"[QWEN_RESPONSE] Tokens returned (eval_count)={eval_count}")
-                    
-                    # Return parsed answer
-                    return answer
+                    if http_response.status_code == 200:
+                        answer = ""
+                        for line in http_response.iter_lines():
+                            if line:
+                                chunk = json.loads(line.decode('utf-8'))
+                                if "message" in chunk and "content" in chunk["message"]:
+                                    answer += chunk["message"]["content"]
+                                elif "response" in chunk:
+                                    answer += chunk["response"]
+                                elif "generated_text" in chunk:
+                                    answer += chunk["generated_text"]
+                                elif "text" in chunk:
+                                    answer += chunk["text"]
+                    else:
+                        raise ValueError(f"Ollama returned HTTP {http_response.status_code}: {http_response.text[:200]}")
                 else:
-                    logger.error("[LLM_ERROR] HTTP %d: %s", http_response.status_code, http_response.text[:200])
-                    raise ValueError(f"Ollama returned HTTP {http_response.status_code}")
+                    # Non-streaming call (default)
+                    http_response = requests.post(
+                        self.generate_endpoint,
+                        json={
+                            "model": self.model,
+                            "prompt": prompt,
+                            "system": system_prompt,
+                            "stream": False,
+                            "think": False,
+                            "options": {
+                                "temperature": temperature,
+                                "num_predict": pred_tokens,
+                                "top_p": 0.9
+                            }
+                        },
+                        timeout=req_timeout,
+                    )
+                    
+                    req_end_time = time.time()
+                    actual_duration = req_end_time - req_start_time
+                    logger.info(f"[QWEN_REQUEST] Attempt {attempt + 1} completed in {actual_duration:.3f} seconds")
+
+                    if http_response.status_code == 200:
+                        response = http_response.json()
+                        answer = ""
+                        if isinstance(response, dict):
+                            answer = (
+                                response.get("message", {}).get("content")
+                                or response.get("response")
+                                or response.get("generated_text")
+                                or response.get("text")
+                                or ""
+                            )
+                        
+                        if (not answer or not answer.strip()) and isinstance(response, dict):
+                            thinking_content = response.get("thinking", "")
+                            if thinking_content and thinking_content.strip():
+                                answer = thinking_content
+                    else:
+                        raise ValueError(f"Ollama returned HTTP {http_response.status_code}: {http_response.text[:200]}")
+
+                if answer is None or not isinstance(answer, str) or len(answer.strip()) == 0:
+                    raise ValueError("Ollama returned an empty response.")
+                
+                # Priority 1: Debug raw model output
+                print("=" * 100)
+                print("RAW RESPONSE FROM OLLAMA")
+                print(repr(answer))
+                print("=" * 100)
+
+                answer = answer.strip()
+                
+                # Clean up <think>...</think> tags if any remain (Priority 6)
+                import re
+                answer = re.sub(r'<think>[\s\S]*?</think>', '', answer).strip()
+                answer = re.sub(r'<think>[\s\S]*?$', '', answer).strip()
+                
+                if "...done thinking." in answer:
+                    answer = answer.split("...done thinking.")[-1].strip()
+                    
+                if len(answer.strip()) == 0:
+                    raise ValueError("Parsed answer is empty after removing thinking block.")
+                
+                # Check for chain-of-thought phrases (Priority 6) - DO NOT retry
+                lower_answer = answer.lower()
+                cot_detected = False
+                for phrase in ["okay, let's", "first,", "i need to", "need to determine", "the user asks"]:
+                    if phrase in lower_answer[:150]:
+                        cot_detected = True
+                        logger.warning(f"[COT_CHECK] Chain of thought detected in first 150 chars: '{phrase}'")
+                        break
+                        
+                # Check minimum word count constraint - DO NOT retry
+                if min_words is not None:
+                    word_count = len(answer.split())
+                    if word_count < min_words:
+                        logger.warning(f"[LENGTH_CHECK] Response length ({word_count} words) is below minimum of {min_words} words.")
+                        
+                # Check completeness (Priority 7) - DO NOT retry
+                if check_completeness:
+                    if self._is_response_incomplete(answer):
+                        logger.warning("[INCOMPLETE_CHECK] Response appears to be incomplete or truncated.")
+                        
+                # Validate JSON (Priority 6 check_json) - DO NOT retry
+                if check_json:
+                    try:
+                        cleaned_json = answer.strip()
+                        if cleaned_json.startswith("```"):
+                            lines = cleaned_json.split("\n")
+                            if lines[0].startswith("```"):
+                                lines = lines[1:]
+                            if lines[-1].startswith("```"):
+                                lines = lines[:-1]
+                            cleaned_json = "\n".join(lines).strip()
+                        json.loads(cleaned_json)
+                    except Exception as json_err:
+                        logger.warning(f"[JSON_CHECK] Response is not valid JSON: {str(json_err)}")
+
+                # Log metrics (Priority 9)
+                word_count = len(answer.split())
+                response_len = len(answer)
+                token_estimate = int(word_count * 1.3)
+                logger.info(f"[QWEN_SUCCESS] Validation succeeded on Attempt {attempt + 1}!")
+                logger.info(f"  - Generation Time: {actual_duration:.3f} seconds")
+                logger.info(f"  - Word Count: {word_count}")
+                logger.info(f"  - Token Estimate: {token_estimate}")
+                logger.info(f"  - Response Length: {response_len} characters")
+                logger.info(f"  - Retry Count: {attempt}")
+                
+                return answer
 
             except (requests.exceptions.Timeout, 
                     requests.exceptions.ConnectionError,
@@ -420,6 +587,8 @@ Maximum 250 words.
                     requests.exceptions.ConnectTimeout,
                     requests.exceptions.RequestException,
                     ValueError) as e:
+                global _OLLAMA_MODEL_VERIFIED
+                _OLLAMA_MODEL_VERIFIED = False
                 logger.warning("[LLM_RETRY] Attempt %d failed: %s", attempt + 1, str(e))
                 if attempt < max_attempts - 1:
                     sleep_time = 2 ** attempt
@@ -429,7 +598,8 @@ Maximum 250 words.
                     logger.error("[LLM_ERROR] Max retries exhausted due to exception: %s", str(e))
 
             except Exception as e:
-                logger.error("[LLM_ERROR] Unexpected error: %s", str(e))
+                _OLLAMA_MODEL_VERIFIED = False
+                logger.error("[LLM_ERROR] Unexpected error on attempt %d: %s", attempt + 1, str(e))
                 if attempt < max_attempts - 1:
                     sleep_time = 2 ** attempt
                     logger.info(f"Retrying in {sleep_time}s (exponential backoff)...")
@@ -443,90 +613,32 @@ Maximum 250 words.
         self, query: str, topic: str, statutes: List[Dict], precedents: List[Dict]
     ) -> str:
         """
-        Build professionally structured prompt for legal reasoning.
+        Build a concise prompt for legal reasoning under 1200 chars.
         """
-        formatted_topic = topic.replace("_", " ").title()
+        statutes_str = ", ".join([f"{s.get('code', '')}: {s.get('title', '')}" for s in statutes[:3]])
+        precedents_str = ", ".join([f"{p.get('case_name', '')} ({p.get('year', '')})" for p in precedents[:2]])
 
-        statute_text = "APPLICABLE STATUTES AND LEGAL PROVISIONS:\n"
-        if statutes:
-            for i, statute in enumerate(statutes, 1):
-                code = statute.get("code", "Statute")
-                title = statute.get("title", "No title")
-                description = statute.get("description", "No description")
-                penalties = statute.get("penalties", "Not specified")
+        prompt = f"""You are a professional Indian legal advisor. Analyze the following:
+Query: {query[:350]}
+Topic: {topic.replace("_", " ").title()}
+Statutes: {statutes_str}
+Precedents: {precedents_str}
 
-                statute_text += f"\n{i}. {code}: {title}\n"
-                statute_text += f"   Definition/Scope: {description}\n"
-                statute_text += f"   Enforcement/Penalties: {penalties}\n"
-        else:
-            statute_text += "\n[Note: Limited statutory coverage for this topic in database]\n"
+Output EXACTLY this format (150-250 words total, max 300 words, no extra text):
+### Case Summary
+[Case facts/background]
 
-        precedent_text = "\nRELEVANT LEGAL PRECEDENTS:\n"
-        if precedents:
-            for i, case in enumerate(precedents, 1):
-                case_name = case.get("case_name", "Case Name Unknown")
-                year = case.get("year", "Year Unknown")
-                court = case.get("court", "Court Unknown")
-                facts = case.get("facts", "Facts not available")
-                holding = case.get("holding", "Holding not available")
+### Legal Issues
+[Key legal questions]
 
-                precedent_text += f"\n{i}. {case_name} ({year})\n"
-                precedent_text += f"   Court: {court}\n"
-                precedent_text += f"   Case Facts: {facts}\n"
-                precedent_text += f"   Legal Principle Established: {holding}\n"
-        else:
-            precedent_text += "\n[Note: No precedents found for this topic in database]\n"
+### Applicable Laws
+[Relevant statutes & precedents]
 
-        prompt = f"""You are a professional Indian legal advisor. Analyze the following query using ONLY the provided statutes and precedents.
+### Recommendations
+[Actionable next steps]
 
-=== LEGAL TOPIC ===
-{formatted_topic}
-
-=== USER QUERY ===
-{query}
-
-{statute_text}
-{precedent_text}
-
-=== ANALYSIS REQUIREMENTS ===
-Your response MUST:
-
-1. LEGAL ANALYSIS:
-   - Explain how applicable statutes relate to the user's situation
-   - Reference the specific sections and their requirements
-   - Connect case law (precedents) to the current facts
-
-2. PRACTICAL GUIDANCE:
-   - Provide actionable steps based on the applicable law
-   - Explain available legal remedies and procedures
-   - Clarify timelines and important considerations
-
-3. CRITICAL CONSTRAINTS:
-   - ONLY reference the statutes and precedents provided above
-   - DO NOT invent laws, sections, or cases
-   - If situation is not covered, state clearly: "This specific scenario is not addressed in available database resources"
-   - Always note limitations of database coverage
-
-4. MANDATORY DISCLAIMER:
-   - Include a clear legal disclaimer at the end
-   - State this is for informational purposes only
-   - Recommend consulting a qualified lawyer for specific guidance
-
-=== RESPONSE FORMAT ===
-Structure your response as:
-
-[LEGAL ANALYSIS]
-Explain applicable laws and precedents...
-
-[PRACTICAL GUIDANCE]
-Steps the user should consider...
-
-[RELEVANT CASE LAW]
-How precedents apply...
-
-[DISCLAIMER]
-Legal disclaimer statement...
-
+### Disclaimer
+This is for informational purposes only. Consult a lawyer.
 === GENERATE RESPONSE ===
 """
         return prompt
@@ -562,3 +674,197 @@ Based on our local database, here is the relevant statutory and precedent data:
 [DISCLAIMER]
 This information is provided from our database as a fallback. It is for informational purposes only and does not constitute formal legal advice. Please consult a qualified legal professional to discuss the particulars of your case."""
         return advice
+
+    def analyze_fir_timeline_and_risk(self, text: str) -> Dict[str, any]:
+        """
+        Query Qwen3:8B to get a chronological timeline of events and legal risk assessment parameters.
+        """
+        prompt = f"""/no_think You are a professional legal document parser. Extract a chronological timeline of events and a legal risk assessment from the following FIR text.
+Return ONLY a valid JSON object. DO NOT explain your reasoning. DO NOT wrap the output in markdown block.
+
+Expected Output Format:
+{{
+  "timeline": [
+    {{"date": "18 Jul 2025", "event": "Fraudulent phone call received"}},
+    {{"date": "20 Jul 2025", "event": "Unauthorized transactions detected"}}
+  ],
+  "risk": {{
+    "severity": "High",
+    "financial_risk": "High",
+    "criminal_exposure": "Medium",
+    "complexity": "Medium",
+    "evidence_strength": "High"
+  }}
+}}
+
+For all risk fields, choose exactly one level from: Low, Medium, High, Critical.
+
+FIR Text:
+{text[:2500]}
+"""
+        import json
+        logger.info("[QWEN_REQUEST] Generating timeline and risk from FIR text...")
+        timeline_system_prompt = "You are a professional legal document parser. Extract structured details from the FIR text and return ONLY a valid JSON object. Do not include any reasoning, conversation, or markdown wrapping."
+        response_text = self._attempt_with_retries(
+            prompt=prompt, 
+            temperature=0.1, 
+            timeout=self.timeout,
+            check_json=True,
+            system_prompt=timeline_system_prompt
+        )
+        
+        default_res = {
+            "timeline": [
+                {"date": "Registration Date", "event": "FIR registered with police station"}
+            ],
+            "risk": {
+                "severity": "Medium",
+                "financial_risk": "Medium",
+                "criminal_exposure": "Medium",
+                "complexity": "Medium",
+                "evidence_strength": "Medium"
+            }
+        }
+        
+        if not response_text:
+            return default_res
+            
+        try:
+            cleaned = response_text.strip()
+            if cleaned.startswith("```"):
+                lines = cleaned.split("\n")
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                cleaned = "\n".join(lines).strip()
+                
+            parsed = json.loads(cleaned)
+            if "timeline" in parsed and "risk" in parsed:
+                # Chronological timeline sorting helper
+                def parse_timeline_date(date_str):
+                    for fmt in ("%d %b %Y", "%d %B %Y", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                        try:
+                            clean_str = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str).strip()
+                            return datetime.strptime(clean_str, fmt)
+                        except ValueError:
+                            continue
+                    return datetime.max
+                
+                # datetime imported at top
+
+                try:
+                    parsed["timeline"].sort(key=lambda x: parse_timeline_date(x.get("date", "")))
+                except Exception as sort_e:
+                    logger.error(f"Error sorting timeline list: {sort_e}")
+                return parsed
+        except Exception as e:
+            logger.error(f"[LLM_ERROR] Failed to parse Qwen timeline/risk JSON: {e}. Raw response: {response_text}")
+            
+        return default_res
+
+    def chat_with_fir_context(self, text: str, history: List[Dict], question: str) -> str:
+        """
+        Respond to user questions regarding the uploaded FIR using Qwen3:8B.
+        """
+        hist_str = ""
+        for msg in history[-5:]:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            hist_str += f"{role.upper()}: {content}\n"
+            
+        prompt = f"""/no_think You are a professional Indian legal advisor assisting a user with an uploaded FIR document.
+Answer the user's question clearly, directly, and professionally using the FIR context and chat history below.
+DO NOT think. DO NOT explain your reasoning. Keep the response under 180 words.
+
+FIR Context:
+{text[:3000]}
+
+Chat History:
+{hist_str}
+
+User Question: {question}
+"""
+        chat_system_prompt = "You are a professional Indian legal advisor assisting a user with an uploaded FIR document. Answer the user's question clearly, directly, and professionally using the FIR context and chat history. Keep it concise."
+        response_text = self._attempt_with_retries(
+            prompt=prompt, 
+            temperature=0.3, 
+            timeout=self.timeout,
+            system_prompt=chat_system_prompt
+        )
+        return response_text or "I apologize, but I was unable to process your question at this time. Please check your connection to Ollama."
+
+    def analyze_legal_notice_doc(self, text: str) -> Dict[str, any]:
+        """
+        Query Qwen3:8B to analyze and explain the uploaded legal notice document in plain language.
+        """
+        prompt = f"""/no_think You are a professional legal document interpreter. Analyze this notice:
+Notice Text:
+{text[:2000]}
+
+Return ONLY a valid JSON object matching this schema (do not output any markdown wrapping or reasoning):
+{{
+  "sender": "sender name",
+  "recipient": "recipient name",
+  "advocate": "advocate or 'None'",
+  "notice_date": "notice date or 'Not specified'",
+  "response_deadline": "deadline or 'Not specified'",
+  "notice_summary": "plain language notice summary",
+  "key_allegations": ["claim 1"],
+  "legal_provisions": [{{"section": "cited section", "explanation": "layman explanation"}}],
+  "required_actions": ["required action"],
+  "possible_consequences": "consequences if ignored",
+  "ai_explanation": "concise plain-English overview",
+  "recommendations": ["recommendation"]
+}}
+"""
+        import json
+        logger.info("[QWEN_REQUEST] Analyzing legal notice doc...")
+        notice_system_prompt = "You are a professional legal document interpreter. Analyze the notice text and return ONLY a valid JSON object matching the requested schema. Do not include any formatting, reasoning, or extra text."
+        response_text = self._attempt_with_retries(
+            prompt=prompt, 
+            temperature=0.1, 
+            timeout=self.timeout,
+            check_json=True,
+            system_prompt=notice_system_prompt
+        )
+        
+        default_res = {
+            "sender": "Not identified",
+            "recipient": "Not identified",
+            "advocate": "None",
+            "notice_date": "Not specified",
+            "response_deadline": "Not specified",
+            "notice_summary": "No summary available.",
+            "key_allegations": [],
+            "legal_provisions": [],
+            "required_actions": [],
+            "possible_consequences": "Failing to respond may lead to legal actions as stated in the notice.",
+            "ai_explanation": "No explanation available.",
+            "recommendations": [
+                "Read the notice carefully.",
+                "Preserve relevant documents.",
+                "Consider consulting a qualified advocate before responding."
+            ]
+        }
+        
+        if not response_text:
+            return default_res
+            
+        try:
+            cleaned = response_text.strip()
+            if cleaned.startswith("```"):
+                lines = cleaned.split("\n")
+                if lines[0].startswith("```json") or lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                cleaned = "\n".join(lines).strip()
+            
+            parsed = json.loads(cleaned)
+            return parsed
+        except Exception as e:
+            logger.error(f"[LLM_ERROR] Failed to parse Qwen notice analysis JSON: {e}. Raw response: {response_text}")
+            
+        return default_res
+

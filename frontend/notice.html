@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indian Legal Advisor - Notice Analysis</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Stylesheets -->
+    <link href="css/style.css" rel="stylesheet">
+    <link href="css/responsive.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar glass-panel" id="app-sidebar">
+            <div class="sidebar-logo">
+                <span class="fs-4">⚖️</span>
+                <span class="fw-bold gradient-text">Advisor AI</span>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="menu-item"><a href="dashboard.html"><i class="fa-solid fa-chart-line"></i> Dashboard</a></li>
+                <li class="menu-item"><a href="query.html"><i class="fa-solid fa-lightbulb"></i> Legal Query</a></li>
+                <li class="menu-item"><a href="fir.html"><i class="fa-solid fa-file-invoice"></i> FIR Analysis</a></li>
+                <li class="menu-item active"><a href="notice.html"><i class="fa-solid fa-magnifying-glass-chart"></i> Notice Analysis</a></li>
+                <li class="menu-item"><a href="chat.html"><i class="fa-solid fa-comments"></i> Case Chat</a></li>
+                <li class="menu-item" id="admin-dashboard-link" style="display:none;"><a href="history.html"><i class="fa-solid fa-table-list"></i> History & Logs</a></li>
+                <li class="menu-item"><a href="profile.html"><i class="fa-solid fa-circle-user"></i> Profile</a></li>
+                <li class="menu-item"><a href="settings.html"><i class="fa-solid fa-gears"></i> Settings</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="fw-semibold text-light small" id="user-profile-name">Username</div>
+                        <div class="text-muted" style="font-size: 11px;" id="user-profile-role">User</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="logout()"><i class="fa-solid fa-power-off"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="main-content">
+            <!-- Topbar Header -->
+            <div class="top-bar glass-panel">
+                <div class="d-flex align-items-center">
+                    <button class="top-bar-toggle me-3" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+                    <h4 class="mb-0 fw-bold">🔎 Legal Notice Analysis</h4>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="badge bg-success border border-success-subtle">🟢 System Online</span>
+                </div>
+            </div>
+
+            <!-- Page Body Content -->
+            <div class="page-body container-fluid fade-in">
+                <!-- Upload Drop Area -->
+                <div class="glass-panel p-5 text-center mb-4" style="border: 2px dashed var(--border-color); cursor: pointer;" onclick="document.getElementById('notice-file-input').click()">
+                    <i class="fa-solid fa-file-shield text-warning mb-3" style="font-size: 48px;"></i>
+                    <h4 class="fw-bold">Upload Legal Notice Document</h4>
+                    <p class="text-muted">Supported formats: PDF, JPG, JPEG, PNG (Max 10MB)</p>
+                    <button class="btn btn-outline-warning btn-sm mt-2">Select Notice File</button>
+                    <input type="file" id="notice-file-input" class="d-none" accept=".pdf,.jpg,.jpeg,.png">
+                </div>
+
+                <div id="notice-alert-container"></div>
+
+                <!-- Simulates OCR Loading -->
+                <div class="glass-panel p-4 mb-4 d-none text-center" id="notice-upload-progress">
+                    <div class="spinner-border text-warning mb-3" role="status"></div>
+                    <h5 class="text-warning">Running Legal Notice OCR & RAG Pipeline...</h5>
+                    <p class="text-muted small">Performing NLP semantic extraction and drafting legal brief...</p>
+                </div>
+
+                <!-- Analysis Results Panel -->
+                <div class="row g-4 d-none" id="notice-results-panel">
+                    <!-- Left Column: metadata info tables -->
+                    <div class="col-lg-5">
+                        <!-- Metadata Card -->
+                        <div class="glass-panel p-4 mb-4">
+                            <h4 class="fw-bold mb-3 text-warning"><i class="fa-solid fa-circle-info me-2"></i> Notice Profile</h4>
+                            <table class="table table-dark table-hover border-secondary" style="font-size: 14px;">
+                                <tbody>
+                                    <tr><td class="text-muted">Sender</td><td id="notice-meta-sender" class="fw-semibold">N/A</td></tr>
+                                    <tr><td class="text-muted">Recipient</td><td id="notice-meta-recipient" class="fw-semibold">N/A</td></tr>
+                                    <tr><td class="text-muted">Advocate/Firm</td><td id="notice-meta-advocate" class="fw-semibold">N/A</td></tr>
+                                    <tr><td class="text-muted">Date</td><td id="notice-meta-date" class="fw-semibold">N/A</td></tr>
+                                    <tr><td class="text-muted">Deadline</td><td id="notice-meta-deadline" class="fw-bold text-danger">⚠️ N/A</td></tr>
+                                </tbody>
+                            </table>
+                            <small class="text-muted" id="notice-meta-elapsed">Processed in 0.00 seconds</small>
+                        </div>
+                        
+                        <!-- Quick Brief Card -->
+                        <div class="glass-panel p-4">
+                            <h4 class="fw-bold mb-3 text-warning"><i class="fa-solid fa-lightbulb me-2"></i> Quick AI Overview</h4>
+                            <div id="notice-overview" class="text-light" style="font-size: 14px; line-height: 1.6;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: tabs details -->
+                    <div class="col-lg-7">
+                        <div class="glass-panel p-4 h-100">
+                            <!-- Tabs Navigation -->
+                            <ul class="nav nav-tabs border-secondary mb-3" id="noticeTabs" role="tablist">
+                                <li class="nav-item">
+                                    <button class="nav-link active bg-transparent text-light border-0 border-bottom border-warning" data-bs-toggle="tab" data-bs-target="#notice-summary-pane" type="button">📑 Notice Summary</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link bg-transparent text-light border-0" data-bs-toggle="tab" data-bs-target="#notice-laws-pane" type="button">⚖️ Legal Sections</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link bg-transparent text-light border-0" data-bs-toggle="tab" data-bs-target="#notice-actions-pane" type="button">💡 AI Explanation</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link bg-transparent text-light border-0" data-bs-toggle="tab" data-bs-target="#notice-steps-pane" type="button">📌 Recommended Steps</button>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content" id="noticeTabsContent">
+                                <!-- Notice Summary Tab -->
+                                <div class="tab-pane fade show active text-light" id="notice-summary-pane">
+                                    <div class="p-2 overflow-auto" style="max-height: 400px;">
+                                        <div id="tab-notice-summary"></div>
+                                        <h5 class="fw-bold mt-4 text-warning">Key Allegations:</h5>
+                                        <ul id="notice-allegations" class="list-unstyled"></ul>
+                                    </div>
+                                </div>
+                                
+                                <!-- Legal Sections Tab -->
+                                <div class="tab-pane fade" id="notice-laws-pane">
+                                    <div class="accordion" id="notice-provisions" style="max-height: 400px; overflow-y: auto;"></div>
+                                </div>
+
+                                <!-- AI Explanation and demands -->
+                                <div class="tab-pane fade text-light" id="notice-actions-pane">
+                                    <div class="p-2 overflow-auto" style="max-height: 400px;">
+                                        <h5 class="fw-bold text-warning">Demanded Actions:</h5>
+                                        <ul id="notice-demands" class="list-unstyled"></ul>
+                                        <h5 class="fw-bold mt-4 text-warning">Consequences if Ignored:</h5>
+                                        <div class="alert alert-warning bg-dark border-warning-subtle text-warning" id="notice-consequences"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Recommended Steps Tab -->
+                                <div class="tab-pane fade text-light" id="notice-steps-pane">
+                                    <div class="p-2 overflow-auto" style="max-height: 400px;">
+                                        <h5 class="fw-bold text-warning mb-3">Next Step Recommendations:</h5>
+                                        <ul id="notice-steps" class="list-unstyled"></ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PDF, text view and exports -->
+                            <div class="border-top border-secondary pt-3 mt-4 d-flex justify-content-between align-items-center">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#notice-raw-text-panel"><i class="fa-solid fa-file-lines me-2"></i> View Transcribed Text</button>
+                                <button class="btn btn-sm gradient-btn" id="download-brief-btn"><i class="fa-solid fa-download me-2"></i> Download Analysis Brief</button>
+                            </div>
+
+                            <div class="collapse mt-3" id="notice-raw-text-panel">
+                                <pre class="bg-dark text-light p-3 rounded overflow-auto" id="notice-extracted-text" style="max-height: 250px; font-size: 13px; white-space: pre-wrap;"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/notice.js"></script>
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleSidebar() {
+            document.getElementById('app-sidebar').classList.toggle('active');
+        }
+    </script>
+</body>
+</html>

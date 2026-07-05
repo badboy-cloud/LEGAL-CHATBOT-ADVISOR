@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Indian Legal Advisor</title>
+    <script>
+        // Entrypoint redirect logic
+        const token = localStorage.getItem('jwt_token');
+        if (token) {
+            window.location.href = 'dashboard.html';
+        } else {
+            window.location.href = 'login.html';
+        }
+    </script>
+</head>
+<body style="background-color: #0b0d10; color: #e2e8f0; font-family: sans-serif; text-align: center; padding-top: 100px;">
+    <h2>⚖️ Indian Legal Advisor</h2>
+    <p>Loading security configuration...</p>
+</body>
+</html>

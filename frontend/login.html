@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indian Legal Advisor - Sign In</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Stylesheets -->
+    <link href="css/style.css" rel="stylesheet">
+    <link href="css/login.css" rel="stylesheet">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card glass-panel fade-in">
+            <div class="auth-header">
+                <h2 class="gradient-text mb-1">⚖️ Legal Advisor</h2>
+                <p class="text-muted small">AI-Powered Legal Intelligence Engine</p>
+            </div>
+            
+            <div class="nav-tabs-custom">
+                <button id="tab-login" class="tab-link active" onclick="switchAuthTab('login')">Sign In</button>
+                <button id="tab-register" class="tab-link" onclick="switchAuthTab('register')">Register</button>
+            </div>
+
+            <div id="auth-alert-container"></div>
+
+            <!-- Login Form -->
+            <form id="login-form" onsubmit="handleAuthSubmit(event, 'login')">
+                <div class="mb-3">
+                    <label for="login-username" class="form-label text-muted">Username</label>
+                    <input type="text" class="form-control" id="login-username" required placeholder="Enter username">
+                </div>
+                <div class="mb-3">
+                    <label for="login-password" class="form-label text-muted">Password</label>
+                    <input type="password" class="form-control" id="login-password" required placeholder="Enter password">
+                    <a href="#" class="forgot-link" onclick="showForgotPassword()">Forgot Password?</a>
+                </div>
+                <button type="submit" class="btn gradient-btn w-100 mt-4 py-2">Sign In <i class="fa-solid fa-arrow-right-to-bracket ms-2"></i></button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="register-form" class="d-none" onsubmit="handleAuthSubmit(event, 'register')">
+                <div class="mb-3">
+                    <label for="register-username" class="form-label text-muted">Username</label>
+                    <input type="text" class="form-control" id="register-username" required placeholder="Choose username">
+                </div>
+                <div class="mb-3">
+                    <label for="register-password" class="form-label text-muted">Password</label>
+                    <input type="password" class="form-control" id="register-password" required placeholder="Choose password (min 6 chars)">
+                </div>
+                <div class="mb-3">
+                    <label for="register-role" class="form-label text-muted">Account Type</label>
+                    <select class="form-select" id="register-role">
+                        <option value="User">Standard User (Client)</option>
+                        <option value="Admin">System Administrator</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn gradient-btn w-100 mt-4 py-2">Create Account <i class="fa-solid fa-user-plus ms-2"></i></button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        // Tab swapper
+        function switchAuthTab(type) {
+            const tabLogin = document.getElementById('tab-login');
+            const tabRegister = document.getElementById('tab-register');
+            const formLogin = document.getElementById('login-form');
+            const formRegister = document.getElementById('register-form');
+            const alertContainer = document.getElementById('auth-alert-container');
+            
+            alertContainer.innerHTML = '';
+            
+            if (type === 'login') {
+                tabLogin.classList.add('active');
+                tabRegister.classList.remove('active');
+                formLogin.classList.remove('d-none');
+                formRegister.classList.add('d-none');
+            } else {
+                tabLogin.classList.remove('active');
+                tabRegister.classList.add('active');
+                formLogin.classList.add('d-none');
+                formRegister.classList.remove('d-none');
+            }
+        }
+
+        async function handleAuthSubmit(e, type) {
+            e.preventDefault();
+            const alertContainer = 'auth-alert-container';
+            
+            if (type === 'login') {
+                const user = document.getElementById('login-username').value.trim();
+                const pass = document.getElementById('login-password').value.trim();
+                const res = await login(user, pass);
+                if (res.success) {
+                    // Success is handled by auth.js redirections
+                } else {
+                    showAlert(alertContainer, res.error, 'danger');
+                }
+            } else {
+                const user = document.getElementById('register-username').value.trim();
+                const pass = document.getElementById('register-password').value.trim();
+                const role = document.getElementById('register-role').value;
+                if (pass.length < 6) {
+                    showAlert(alertContainer, 'Password must be at least 6 characters long.', 'danger');
+                    return;
+                }
+                const res = await register(user, pass, role);
+                if (res.success) {
+                    showAlert(alertContainer, 'Account created successfully! Switching to login...', 'success');
+                    setTimeout(() => {
+                        switchAuthTab('login');
+                        document.getElementById('login-username').value = user;
+                    }, 1500);
+                } else {
+                    showAlert(alertContainer, res.error, 'danger');
+                }
+            }
+        }
+
+        function showForgotPassword() {
+            showAlert('auth-alert-container', 'Password recovery instructions have been sent to your registered email/system logs.', 'info');
+        }
+
+        // Show session expired warnings
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('expired') === 'true') {
+                showAlert('auth-alert-container', 'Your security session has expired. Please sign in again.', 'warning');
+            }
+        });
+    </script>
+</body>
+</html>

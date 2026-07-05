@@ -1,0 +1,33 @@
+/* responsive.css - Mobile adaptations */
+@media (max-width: 991px) {
+    .sidebar {
+        position: fixed;
+        left: -280px;
+        top: 0;
+        bottom: 0;
+        background-color: var(--bg-color);
+        transition: left 0.3s ease;
+    }
+    
+    .sidebar.active {
+        left: 0;
+    }
+    
+    .top-bar-toggle {
+        display: block !important;
+    }
+    
+    .main-content {
+        height: auto;
+        overflow-y: visible;
+    }
+}
+
+.top-bar-toggle {
+    display: none;
+    font-size: 20px;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+}

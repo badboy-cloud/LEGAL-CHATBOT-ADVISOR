@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indian Legal Advisor - Settings</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Stylesheets -->
+    <link href="css/style.css" rel="stylesheet">
+    <link href="css/responsive.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar glass-panel" id="app-sidebar">
+            <div class="sidebar-logo">
+                <span class="fs-4">⚖️</span>
+                <span class="fw-bold gradient-text">Advisor AI</span>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="menu-item"><a href="dashboard.html"><i class="fa-solid fa-chart-line"></i> Dashboard</a></li>
+                <li class="menu-item"><a href="query.html"><i class="fa-solid fa-lightbulb"></i> Legal Query</a></li>
+                <li class="menu-item"><a href="fir.html"><i class="fa-solid fa-file-invoice"></i> FIR Analysis</a></li>
+                <li class="menu-item"><a href="notice.html"><i class="fa-solid fa-magnifying-glass-chart"></i> Notice Analysis</a></li>
+                <li class="menu-item"><a href="chat.html"><i class="fa-solid fa-comments"></i> Case Chat</a></li>
+                <li class="menu-item" id="admin-dashboard-link" style="display:none;"><a href="history.html"><i class="fa-solid fa-table-list"></i> History & Logs</a></li>
+                <li class="menu-item"><a href="profile.html"><i class="fa-solid fa-circle-user"></i> Profile</a></li>
+                <li class="menu-item active"><a href="settings.html"><i class="fa-solid fa-gears"></i> Settings</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="fw-semibold text-light small" id="user-profile-name">Username</div>
+                        <div class="text-muted" style="font-size: 11px;" id="user-profile-role">User</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="logout()"><i class="fa-solid fa-power-off"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="main-content">
+            <!-- Topbar Header -->
+            <div class="top-bar glass-panel">
+                <div class="d-flex align-items-center">
+                    <button class="top-bar-toggle me-3" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+                    <h4 class="mb-0 fw-bold">⚙️ Settings</h4>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="badge bg-success border border-success-subtle">🟢 System Online</span>
+                </div>
+            </div>
+
+            <!-- Page Body Content -->
+            <div class="page-body container-fluid fade-in">
+                <div class="row g-4 justify-content-center">
+                    <div class="col-lg-6">
+                        <div class="glass-panel p-4">
+                            <h4 class="fw-bold mb-3 text-warning"><i class="fa-solid fa-gears me-2"></i> System Configuration</h4>
+                            
+                            <div id="settings-alert-container"></div>
+                            
+                            <form id="settings-form">
+                                <div class="mb-3">
+                                    <label for="api-url-input" class="form-label text-muted">FastAPI Service URL</label>
+                                    <input type="text" class="form-control" id="api-url-input" required placeholder="E.g., http://127.0.0.1:8000">
+                                    <small class="text-muted">Target host endpoint hosting the legal parsing endpoints.</small>
+                                </div>
+                                <div class="mb-4">
+                                    <label for="font-size-select" class="form-label text-muted">Workspace Text Font Size</label>
+                                    <select class="form-select" id="font-size-select">
+                                        <option value="small">Small (Comfortable reading)</option>
+                                        <option value="normal" selected>Medium (Standard default)</option>
+                                        <option value="large">Large (High visibility)</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn gradient-btn w-100 py-2"><i class="fa-solid fa-save me-2"></i> Save Settings</button>
+                            </form>
+
+                            <hr class="border-secondary my-4">
+
+                            <h5 class="fw-bold text-danger mb-3"><i class="fa-solid fa-trash-can me-2"></i> Clear Local Cache</h5>
+                            <p class="text-muted small">Purge locally saved legal briefs and analysis reports from local session storage. This does not affect logs saved on the server database.</p>
+                            <button class="btn btn-outline-danger btn-sm" onclick="clearLocalCache()"><i class="fa-solid fa-circle-minus me-2"></i> Clear Cache</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/settings.js"></script>
+    <script>
+        function toggleSidebar() {
+            document.getElementById('app-sidebar').classList.toggle('active');
+        }
+    </script>
+</body>
+</html>
