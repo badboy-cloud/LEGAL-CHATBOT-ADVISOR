@@ -443,27 +443,36 @@ class LegalPipeline:
         statutes_str = ", ".join(statutes[:3])
         precedents_str = ", ".join([p.get('case_name', '') for p in precedents[:2]])
 
-        prompt = f"""You are a professional legal notice interpreter. Analyze this notice:
-Notice Text: {extracted_text[:2000]}
+        prompt = f"""You are a professional legal notice interpreter. Analyze the following document text and extract the required details:
+Document Text: {extracted_text[:3000]}
 Topic: {topic}
 Statutes: {statutes_str}
 Precedents: {precedents_str}
 
-Return ONLY a valid JSON object matching this schema (no extra text or markdown wrapping):
+Analyze the document and generate a valid JSON response. You must replace the placeholders in the JSON with your actual legal analysis based on the document text. Do not return the placeholder words verbatim.
+
+Required JSON format:
 {{
-  "sender": "{notice_info['sender']}",
-  "recipient": "{notice_info['recipient']}",
-  "advocate": "{notice_info['advocate']}",
-  "notice_date": "{notice_info['notice_date']}",
-  "response_deadline": "{notice_info['response_deadline']}",
-  "notice_summary": "Summary of notice claims/allegations",
-  "key_allegations": ["allegation 1", "allegation 2"],
-  "legal_provisions": [{{"section": "IPC Section X", "explanation": "Layman explanation"}}],
-  "required_actions": ["demanded action 1"],
-  "possible_consequences": "consequences if ignored",
-  "ai_explanation": "concise plain-English overview of the notice",
-  "recommendations": ["recommended action 1", "recommended action 2"]
+  "sender": "{notice_info['sender'] if notice_info['sender'] != 'Not identified' else '<extract sender if possible, otherwise keep Not identified>'}",
+  "recipient": "{notice_info['recipient'] if notice_info['recipient'] != 'Not identified' else '<extract recipient if possible, otherwise keep Not identified>'}",
+  "advocate": "{notice_info['advocate'] if notice_info['advocate'] != 'None' else '<extract advocate if possible, otherwise keep None>'}",
+  "notice_date": "{notice_info['notice_date'] if notice_info['notice_date'] != 'Not specified' else '<extract notice date if possible, otherwise keep Not specified>'}",
+  "response_deadline": "{notice_info['response_deadline'] if notice_info['response_deadline'] != 'Not specified' else '<extract response deadline if possible, otherwise keep Not specified>'}",
+  "notice_summary": "<Write a detailed summary of the claims and allegations in the notice>",
+  "key_allegations": ["<allegation 1>", "<allegation 2>", ...],
+  "legal_provisions": [
+    {{
+      "section": "<cited legal section, e.g. Section 138 of NI Act>",
+      "explanation": "<explain in simple terms why this section is cited and what it means for the parties>"
+    }}
+  ],
+  "required_actions": ["<action demanded from recipient 1>", ...],
+  "possible_consequences": "<legal consequences or actions that may follow if this notice is ignored>",
+  "ai_explanation": "<Provide a concise, plain-English overview explaining what this notice is about and its severity>",
+  "recommendations": ["<recommended next step 1>", "<recommended next step 2>", ...]
 }}
+
+Ensure the output is ONLY a valid JSON object matching the format above. Do not output any markdown wrapping (such as ```json) or thinking tags.
 === GENERATE RESPONSE ===
 """
         # Call Qwen exactly ONCE

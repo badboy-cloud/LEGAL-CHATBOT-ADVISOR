@@ -798,24 +798,31 @@ User Question: {question}
         """
         Query Qwen3:8B to analyze and explain the uploaded legal notice document in plain language.
         """
-        prompt = f"""/no_think You are a professional legal document interpreter. Analyze this notice:
+        prompt = f"""/no_think You are a professional legal document interpreter. Analyze the following notice document text and extract the required details:
 Notice Text:
-{text[:2000]}
+{text[:3000]}
 
-Return ONLY a valid JSON object matching this schema (do not output any markdown wrapping or reasoning):
+Analyze the notice and generate a valid JSON response. You must replace the placeholders in the JSON with your actual legal analysis based on the notice text. Do not return the placeholder words verbatim.
+
+Required JSON format:
 {{
-  "sender": "sender name",
-  "recipient": "recipient name",
-  "advocate": "advocate or 'None'",
-  "notice_date": "notice date or 'Not specified'",
-  "response_deadline": "deadline or 'Not specified'",
-  "notice_summary": "plain language notice summary",
-  "key_allegations": ["claim 1"],
-  "legal_provisions": [{{"section": "cited section", "explanation": "layman explanation"}}],
-  "required_actions": ["required action"],
-  "possible_consequences": "consequences if ignored",
-  "ai_explanation": "concise plain-English overview",
-  "recommendations": ["recommendation"]
+  "sender": "<extract sender name if possible, otherwise 'Not identified'>",
+  "recipient": "<extract recipient name if possible, otherwise 'Not identified'>",
+  "advocate": "<extract advocate name if possible, otherwise 'None'>",
+  "notice_date": "<extract notice date if possible, otherwise 'Not specified'>",
+  "response_deadline": "<extract response deadline if possible, otherwise 'Not specified'>",
+  "notice_summary": "<Write a detailed summary of the notice claims/allegations>",
+  "key_allegations": ["<claim 1>", "<claim 2>", ...],
+  "legal_provisions": [
+    {{
+      "section": "<cited section, e.g. Section 138 of NI Act>",
+      "explanation": "<layman explanation of cited section>"
+    }}
+  ],
+  "required_actions": ["<required action 1>", ...],
+  "possible_consequences": "<consequences if notice is ignored>",
+  "ai_explanation": "<Provide a concise, plain-English overview explaining what this notice is about and its severity>",
+  "recommendations": ["<recommended action 1>", ...]
 }}
 """
         import json
